@@ -1,0 +1,27 @@
+variable categorization :
+Continuous var :
+avgnoisedb
+arena_temp
+attendance
+game_date
+seconds_remaining
+minutes_remaining
+lon
+loc_y
+loc_x
+lat
+game_event_id
+
+Factors :
+
+shot_zone_range
+shot_zone_basic
+shot_zone_area
+playoffs
+period
+shot_type
+Season
+opponent
+matchup
+combined_shot_type
+action_type
