@@ -2,18 +2,18 @@
 title: "Kobe_Analysis"
 author: "Pankaj Kumar"
 date: "7/14/2019"
-output: html_document
+output:
+  word_document: default
+  html_document: default
 ---
 
 ```{r setup, include=FALSE}
 knitr::opts_chunk$set(echo = TRUE)
 
 library(tidyverse)
-library(tidyverse)
 library(caret)
 library(reshape2)
 library(car)
-library(caret)
 ```
 
 
@@ -26,11 +26,50 @@ kobe_pred_data = readxl::read_excel('Analysis/Data/project2KobeData.xlsx', sheet
 ```
 
 
-# plots 
+## Some observation on the data 
+
+```{r}
+
+length(kobe_data)
+nrow(kobe_data)
+ncol(kobe_data)
+dim(kobe_data)
+
+```
+
+
+## check if there are any null or empty values are there
+
+```{r, echo= FALSE , warning=FALSE }
+sapply(kobe_data, function (x) {sum(x!="")}) != 20697
+
+```
+
+### Not null or missing
 
 ```{r, echo= FALSE , warning=FALSE }
 
+sapply(kobe_data, function (x) {sum(is.na(x))}) != 0
 
+
+```
+
+### Transformations :
+
+
+minutes remaining and second remaining can be compined to make a new variable called time remaining
+
+
+```{r, echo= FALSE , warning=FALSE }
+
+kobe_data = mutate(kobe_data, time_remaning= minutes_remaining+ seconds_remaining/60 ) 
+```
+
+
+
+# plots 
+
+```{r, echo= FALSE , warning=FALSE }
 
 p = ggplot(data= kobe_data) 
 
@@ -38,6 +77,8 @@ p = ggplot(data= kobe_data)
 
 
 ## Factors 
+
+Graphs of all the variable with alphanumeric value.
 
 ### action_type
 
@@ -158,7 +199,14 @@ p+
   
 ```
 
+## Numerical variables that can be treated as factors
 
+### game_event_id  
+
+```{r, echo = FALSE , warning= FALSE}
+
+
+```
 
 
   
@@ -328,7 +376,7 @@ p+
 
 ```
 
-### Multicolineariy and Outliers Analysis 
+### Multicolineariy detection using VIF
 
 
 ```{r , echo= FALSE , warning= FALSE}
@@ -372,6 +420,11 @@ logistic_model = glm (log_mod_formula,  data = kobe_data_for_log_model, family =
 
 alias(logistic_model)
 vif(logistic_model)
+```
+
+### Outlier detection using cook's D value
+
+```{r , echo= FALSE , warning= FALSE}
 
 cooksd = cooks.distance(logistic_model)
 plot(cooksd, pch="*", cex=2, main="Influential Obs by Cooks distance")  # plot cook's distance
@@ -379,5 +432,20 @@ abline(h = 4*mean(cooksd, na.rm=T), col="red")  # add cutoff line
 text(x=1:length(cooksd)+1, y=cooksd, labels=ifelse(cooksd>4*mean(cooksd, na.rm=T),names(cooksd),""), col="red")
 
  
+```
+
+### Relation of shot made with distance and playoffs 
+
+```{r , echo= FALSE , warning= FALSE}
+
+p+
+  geom_point(mapping =  aes(x= shot_distance, y =   as.factor(shot_made_flag)))
+
+p+
+  geom_histogram(mapping =  aes(x= shot_distance, fill = 
+                                  as.factor( shot_made_flag)))+
+  facet_wrap(.~playoffs)
+
+
 ```
 
