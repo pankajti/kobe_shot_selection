@@ -1,0 +1,227 @@
+---
+title: "RegressionModeling"
+author: "Team PK SJ KJ"
+date: "8/9/2019"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+library(tidyverse)
+library(data.table)
+library(mltools)
+library(MASS)
+library(ROCR)
+library(caret)
+library(ggplot2)
+
+```
+
+## Loading dataset
+
+load the data for training and prediction 
+```{r dataset loading}
+kobe_data = readxl::read_excel('../Analysis/Data/project2KobeData.xlsx' , sheet = 'modelData')
+kobe_pred_data = readxl::read_excel('../Analysis/Data/project2KobeData.xlsx', sheet = 'predData')
+
+```
+
+1. select variables (refer to Modeling/varaible_selection.xlsx on further explanation)
+2. varialbes chosen as factors 
+
+```{r data transform}
+var_f = c("opponent", "season","period","playoffs")
+
+training_data <- kobe_data %>% mutate(time_remaining = minutes_remaining + seconds_remaining/60) %>%
+  mutate_at(var_f, factor) %>% 
+  dplyr::select(opponent, season, arena_temp, attendance, avgnoisedb, lat, lon, 
+         time_remaining, period, playoffs, shot_distance, shot_made_flag)
+
+head(training_data)
+```
+
+## Fitting Preparation
+The formular includes all the prepared variables 
+
+```{r formula prep}
+formula_log_init = shot_made_flag ~ opponent + season + arena_temp + attendance + avgnoisedb + lat + lon + time_remaining + period + playoffs + shot_distance
+
+
+```
+
+
+## Logistic Regression Full Model
+# model fitting 
+```{r log init}
+fit_log_init = glm(formula_log_init, data = training_data, family = "binomial") 
+pred_fit_log_init = predict(fit_log_init, training_data, type= 'response') 
+tbl_log_init = table(model = as.numeric(pred_fit_log_init>0.5), reference = as.numeric(training_data$shot_made_flag))
+
+mis_classification_log_init = 1 - sum(diag(tbl_log_init))/sum(tbl_log_init)
+print(mis_classification_log_init)
+print(sensitivity(tbl_log_init))
+print(specificity(tbl_log_init)) 
+
+pred_fit_log_init.pred <- prediction(pred_fit_log_init, training_data$shot_made_flag)
+roc.log_init = performance(pred_fit_log_init.pred, measure="tpr", x.measure="fpr")
+auc.log_init <- performance(pred_fit_log_init.pred, measure="auc")
+auc.log_init <- auc.log_init@y.values 
+print(auc.log_init)
+
+```
+
+# plotting 
+
+```{r log init plot}
+plot(roc.log_init, main="Logistic regression full model")
+abline(a=0, b=1)
+text(x=.25, y=.65, paste("AUC = ", round(auc.log_init[[1]],3), sep =""))
+text(x=.25, y=.75, paste("Mis-classification = ", round(mis_classification_log_init,3),sep=""))
+text(x=.80, y=.45, paste("Sensitivity = ", round(sensitivity(tbl_log_init),3),sep=""))
+text(x=.80, y=.35, paste("Specificity = ", round(specificity(tbl_log_init),3),sep=""))
+
+```
+
+## Logistic Regression Reduced Model
+# model fitting 
+The p value of opponent, season, avgnoisedb, lon, playoff, period is low, so we will try exclude such variables except playoff 
+
+```{r log reduced}
+
+formula_log_02 = shot_made_flag ~ arena_temp + attendance + lat + time_remaining + playoffs + shot_distance
+fit_log_02 = glm(formula_log_02, data = training_data, family = "binomial") 
+
+pred_fit_log_02 = predict(fit_log_02, training_data, type= 'response') 
+tbl_log_02 = table(model = as.numeric(pred_fit_log_02>0.5), reference = as.numeric(training_data$shot_made_flag))
+mis_classification_log_02 = 1 - sum(diag(tbl_log_02))/sum(tbl_log_02)
+print(mis_classification_log_02)
+print(sensitivity(tbl_log_02))
+print(specificity(tbl_log_02))
+
+
+pred_fit_log_02.pred <- prediction(pred_fit_log_02, training_data$shot_made_flag)
+roc.log_02 = performance(pred_fit_log_02.pred, measure="tpr", x.measure="fpr")
+auc.log_02 <- performance(pred_fit_log_02.pred, measure="auc")
+auc.log_02 <- auc.log_02@y.values 
+print(auc.log_02)
+```
+
+# plotting
+
+```{r log reduce plot }
+plot(roc.log_02, main="Logistic regression reduced model")
+abline(a=0, b=1)
+text(x=.25, y=.65, paste("AUC = ", round(auc.log_02[[1]],3), sep =""))
+text(x=.25, y=.75, paste("Mis-classification = ", round(mis_classification_log_02,3),sep=""))
+text(x=.80, y=.45, paste("Sensitivity = ", round(sensitivity(tbl_log_02),3),sep=""))
+text(x=.80, y=.35, paste("Specificity = ", round(specificity(tbl_log_02),3),sep=""))
+```
+
+## LDA model fitting
+# model fitting 
+We will use the variables from the logistic regression full model 
+```{r lda init}
+fit_lda_init = lda(formula_log_init, data = training_data)
+pred_fit_lda_init = predict(fit_lda_init, training_data) 
+tbl_lda_init = table(model = pred_fit_lda_init$class, reference = as.numeric(training_data$shot_made_flag))
+
+mis_classification_lda_init = 1 - sum(diag(tbl_lda_init))/sum(tbl_lda_init)
+print(mis_classification_lda_init)
+print(sensitivity(tbl_lda_init))
+print(specificity(tbl_lda_init))
+
+
+pred_fit_lda_init.posteriors <- as.data.frame(pred_fit_lda_init$posterior)
+pred_fit_lda_init.pred <- prediction(pred_fit_lda_init.posteriors[,2], training_data$shot_made_flag)
+roc.lda_init = performance(pred_fit_lda_init.pred, measure="tpr", x.measure="fpr")
+auc.lda_init <- performance(pred_fit_lda_init.pred, measure="auc")
+auc.lda_init <- auc.lda_init@y.values 
+print(auc.lda_init)
+
+```
+
+# plotting
+
+```{r lda init plot}
+plot(roc.lda_init, main="LDA model")
+abline(a=0, b=1)
+text(x=.25, y=.65, paste("AUC = ", round(auc.lda_init[[1]],3), sep =""))
+text(x=.25, y=.75, paste("Mis-classification = ", round(mis_classification_lda_init,3),sep=""))
+text(x=.80, y=.45, paste("Sensitivity = ", round(sensitivity(tbl_lda_init),3),sep=""))
+text(x=.80, y=.35, paste("Specificity = ", round(specificity(tbl_lda_init),3),sep=""))
+
+```
+
+## Model Selection - Logistic Regression Full Model 
+This model showed lower mis-classification with higher AUC, Sensitivity and Specificity.
+We will also confim the fact from the loss function 
+
+# data prep for Excel-based loss function calculation
+```{r loss List creation}
+loss_list <- training_data %>% dplyr::select(shot_made_flag) %>%
+  mutate(log_init_prob = pred_fit_log_init, log_02_prob = pred_fit_log_02, 
+         lda_init_prob = pred_fit_lda_init.posteriors[,2])
+
+write_csv(loss_list, "../modeling/loss_function_list.csv")
+
+```
+
+## Checking three propositions 
+function prep to calculate odds/probability
+
+```{r function def}
+logit2odds <- function(logit){
+  odds <- exp(logit)
+  return(odds)
+}
+
+logit2prob <- function(logit){
+  odds <- exp(logit)
+  prob <- odds / (1 + odds)
+  return(prob)
+}
+
+```
+
+extracting shot distance and confidence interval values 
+
+```{r conf interval}
+# extracting logit value of shot_distance including UL/LL from Conf Interval 
+
+logit_LL <- confint.default(fit_log_init)["shot_distance",1]
+logit_UL <- confint.default(fit_log_init)["shot_distance",2]
+logit_shot_distance <- coef(fit_log_init)[c("shot_distance")]
+
+# Odds of shot distance 
+odds_LL <- logit2odds(logit_LL)
+odds_UL <- logit2odds(logit_UL)
+odds_shot_distance <- logit2odds(logit_shot_distance)
+
+# Prob of shot distance 
+prob_LL <- logit2prob(logit_LL)
+prob_UL <- logit2prob(logit_UL)
+prob_shot_distance <- logit2prob(logit_shot_distance)
+
+```
+
+# Proposition 1 : 
+The odds of Kobe making a shot decrease with respect to the distance he is from the hoop
+
+```{r prop 1}
+
+```
+
+# Propostion 2 : 
+The probability of Kobe making a shot decreases linearly with respect to the distance he is from the hoop
+
+```{r prop 2}
+
+```
+
+# Proposition 3: 
+The relationship between the distance Kobe is from the basket and the odds of him making the shot is different if they are in the playoffs
+
+```{r prop 3}
+
+```
+
