@@ -183,8 +183,9 @@ logit2prob <- function(logit){
 
 ```
 
-extracting shot distance and confidence interval values 
-
+## Proposition 1 : 
+According to our model, the odds of Kobe making a shot decrease with respect to the distance he is from the hoop.
+The odds ratio from the variable 'shot distance' is 0.9513, and the confidence interval remain under 1.0.
 ```{r conf interval}
 # extracting logit value of shot_distance including UL/LL from Conf Interval 
 
@@ -193,35 +194,47 @@ logit_UL <- confint.default(fit_log_init)["shot_distance",2]
 logit_shot_distance <- coef(fit_log_init)[c("shot_distance")]
 
 # Odds of shot distance 
-odds_LL <- logit2odds(logit_LL)
-odds_UL <- logit2odds(logit_UL)
-odds_shot_distance <- logit2odds(logit_shot_distance)
+odds_LL <- round(logit2odds(logit_LL),4)
+odds_UL <- round(logit2odds(logit_UL),4)
+odds_shot_distance <- round(logit2odds(logit_shot_distance),4)
 
-# Prob of shot distance 
-prob_LL <- logit2prob(logit_LL)
-prob_UL <- logit2prob(logit_UL)
-prob_shot_distance <- logit2prob(logit_shot_distance)
-
-```
-
-# Proposition 1 : 
-The odds of Kobe making a shot decrease with respect to the distance he is from the hoop
-
-```{r prop 1}
-
+print(paste("OR Shot Distance: ", odds_shot_distance, "CI: ", odds_LL, " - ", odds_UL ))
 ```
 
 # Propostion 2 : 
-The probability of Kobe making a shot decreases linearly with respect to the distance he is from the hoop
+We concluded that the probability of Kobe making a shot decreases with respect to the distance he is from the hoop. But it is not linear as the logit-transformed probability is linear to predictors. 
+We visualized with simple model from fitted OR for shot distance 
 
 ```{r prop 2}
+C0 <- as.numeric(fit_log_init$coefficients["(Intercept)"])
+C1 <- as.numeric(fit_log_init$coefficients["shot_distance"])
+plot_prob_df <- data.frame(shot_d = seq(0,79, by=1)) %>% mutate(shot_prob = logit2prob(C0+shot_d*C1))
+plot(plot_prob_df, main="Shot Probability Reduction by Shot Distance", xlab="Shot Distance", ylab="Probability",yaxt="n")
 
 ```
 
 # Proposition 3: 
-The relationship between the distance Kobe is from the basket and the odds of him making the shot is different if they are in the playoffs
+The relationship between the distance Kobe is from the basket and the odds of him making the shot is not different if they are in the playoffs. The confidence interval of the odds ratio include 1, so the effect from the playoff or not could happen by chance. 
 
 ```{r prop 3}
+odds_poff_LL <- exp(confint.default(fit_log_init)["playoffs1",1])
+odds_poff_UL <- exp(confint.default(fit_log_init)["playoffs1",2])
+odds_poff <- exp(coef(fit_log_init)[c("playoffs1")])
 
+print(paste("OR Play Off: ", odds_poff, "CI: ", odds_poff_LL, " - ", odds_poff_UL ))
 ```
 
+# Prediction of 5000 shots
+Exporting the predicted shot result 
+
+``` {r predict export}
+prediction_data <- kobe_pred_data %>% mutate(time_remaining = minutes_remaining + seconds_remaining/60) %>%
+  mutate_at(var_f, factor) %>% 
+  dplyr::select(opponent, season, arena_temp, attendance, avgnoisedb, lat, lon, 
+                time_remaining, period, playoffs, shot_distance, shot_id)
+
+predict_submit <- prediction_data %>% mutate(shot_prob = predict(fit_log_init, prediction_data, type='response')) %>% 
+    mutate(shot_made_flag = ifelse(shot_prob > 0.5, 1,0)) %>% dplyr::select(shot_id, shot_made_flag)
+
+write_csv(predict_submit, "../modeling/predict_submission_5kshots.csv")
+```
